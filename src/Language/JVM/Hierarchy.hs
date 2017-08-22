@@ -4,6 +4,8 @@
 {-# LANGUAGE ExistentialQuantification #-}
 module Language.JVM.Hierarchy
   ( Hierarchy
+
+  , tryGetClass
   , getClass
   , putText
 
@@ -41,6 +43,7 @@ import qualified Data.Text.IO as TIO
 
 data HierarchyLang a
   = GetClass ClassName (Class -> a)
+  | TryGetClass ClassName (Either String Class -> a)
   | PutText T.Text (() -> a)
   deriving (Functor)
 
@@ -49,6 +52,10 @@ type Hierarchy = Free HierarchyLang
 getClass :: ClassName -> Hierarchy Class
 getClass classname =
   Free $ GetClass classname Pure
+
+tryGetClass :: ClassName -> Hierarchy (Either String Class)
+tryGetClass classname =
+  Free $ TryGetClass classname Pure
 
 putText :: T.Text -> Hierarchy ()
 putText text =
@@ -75,8 +82,17 @@ runHierarchy clf h =
                 (_, Right clz) : _ -> go (M.insert cn clz m) (f clz)
                 (_, Left msg) : _ -> fail msg
                 [] -> fail $ "Couldn't find " ++ show cn
-        (PutText t f)-> do
+        PutText t f -> do
           go m . f =<< TIO.putStrLn t
+        TryGetClass cn f ->
+          case M.lookup cn m of
+            Just clz -> go m (f (Right clz))
+            Nothing -> do
+              clzes <- clf cn
+              case clzes of
+                (_, Right clz) : _ -> go (M.insert cn clz m) (f $ Right clz)
+                (_, Left msg) : _ -> go m (f $ Left msg)
+                [] -> go m (f . Left $ "Couldn't find " ++ show cn)
     go m (Pure a) =
       return a
 

@@ -82,10 +82,17 @@ main = do
 
     runHierarchy interp $ do
       forM_ cns $ \cn -> do
-        traceM $ "Loaded " ++ show cn
-        inter <- S.toList <$> indirectInterfaces cn
-        methods <- concat <$> mapM (hview $ Class.methods . to (map (Method.desc cn))) inter
-        forM_ methods putText
+        traceM $ "Try to loaded " ++ show cn
+        clz <- tryGetClass cn
+        case clz of
+          Left _ -> do
+            traceM $ "Could not loaded " ++ show cn
+            return ()
+          Right _ -> do
+            inter <- S.toList <$> indirectInterfaces cn
+            methods <- concat <$>
+              mapM (hview $ Class.methods . to (map (Method.desc cn))) inter
+            forM_ methods putText
 
 
   when (args `isPresent` (command "list-methods")) $ do
